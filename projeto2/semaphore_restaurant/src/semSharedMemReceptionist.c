@@ -147,9 +147,13 @@ int main (int argc, char *argv[])
  *
  *  \return table id or -1 (in case of wait decision)
  */
-static int decideTableOrWait(int n)
-{
+static int decideTableOrWait(int n){
      //TODO insert your code here
+    while(1){
+        if(sh->fSt.table[n] == 0){
+            sh->fSt.table[n] = 1;
+            return n;
+        }
 
      return -1;
 }
@@ -165,7 +169,11 @@ static int decideTableOrWait(int n)
 static int decideNextGroup()
 {
      //TODO insert your code here
-
+    for (int i = 0; i < sh->fSt.nGroups; i++){
+        if (groupRecord[i] == WAIT){
+            groupRecord[i] = ATTABLE;
+            return i;
+        }
      return -1;
 }
 
