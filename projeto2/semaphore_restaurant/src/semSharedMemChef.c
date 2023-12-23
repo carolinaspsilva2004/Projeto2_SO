@@ -169,7 +169,7 @@ static void processOrder ()
 
     //TODO insert your code here
     sh->fSt.st.chefStat = REST;
-    sh->fSt.foodReady = 1;
+    sh->fSt.foodOrder = 1;
     saveState(nFic, &sh->fSt);
 
     if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
