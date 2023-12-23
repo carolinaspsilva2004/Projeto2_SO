@@ -139,6 +139,11 @@ static request waitForClientOrChef()
 {
     request req;
     req.reqType = 0;
+
+    if (semDown (semgid, sh->waiterRequest) == -1) {                                                  /* enter critical region */
+        perror ("error on the up operation for semaphore access (WT)");
+        exit (EXIT_FAILURE);
+    }
     if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
         perror ("error on the up operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
@@ -166,43 +171,44 @@ static request waitForClientOrChef()
     
 
     // TODO insert your code here
-    if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
-        perror ("error on the up operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    if (semDown(semgid, sh->mutex) == -1) {  /* enter critical region */
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
-    else if (sh->fSt.foodOrder == 1){
+
+    if (sh->fSt.foodOrder == 1) {
         req.reqType = FOODREQ;
-        req.reqGroup = sh->fSt.groupOrder;
+        req.reqGroup = sh->fSt.groupsWaiting;
         sh->fSt.foodOrder = 0;
-        sh->fSt.st.waiterStat = WITH_ORDER;
+        sh->fSt.st.waiterStat = ORDERRECEIVED;
         saveState(nFic, &sh->fSt); 
-    }
-    else if (sh->fSt.foodReady == 1){
+    } else if (sh->fSt.foodOrder== 1) {
         req.reqType = FOODREADY;
-        req.reqGroup = sh->fSt.groupReady;
-        sh->fSt.foodReady = 0;
-        sh->fSt.st.waiterStat = WITH_ORDER;
+        req.reqGroup = sh->fSt.foodGroup;
+        sh->fSt.foodOrder = 0;
+        sh->fSt.st.waiterStat = ORDERRECEIVED;
         saveState(nFic, &sh->fSt); 
-    }
-    else if (sh->fSt.billRequest == 1){
+    } else if (sh->fSt.billRequest == 1) {
         req.reqType = BILL;
-        req.reqGroup = sh->fSt.groupBill;
+        req.reqGroup = sh->fSt.groupsWaiting;
         sh->fSt.billRequest = 0;
-        sh->fSt.st.waiterStat = WITH_ORDER;
+        sh->fSt.st.waiterStat = ORDERRECEIVED;
         saveState(nFic, &sh->fSt); 
-    }
-    else{
+    } else {
         sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
         saveState(nFic, &sh->fSt); 
     }
-     saveState(nFic, &sh->fSt); 
 
-    /* fim */
-    if (semUp (semgid, sh->mutex) == -1) {                                                  /* exit critical region */
-            perror ("error on the down operation for semaphore access (WT)");
-            exit (EXIT_FAILURE);
-        }
-    
+    if (semUp(semgid, sh->mutex) == -1) {  /* exit critical region */
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+
+    if (semUp(semgid, sh->waiterRequest) == -1) {  /* signal that the waiter is ready for a new request */
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+
     return req;
 
 }
@@ -243,6 +249,18 @@ static void informChef (int n)
         exit (EXIT_FAILURE);
     }
     // TODO insert your code here
+    if (semDown(semgid, sh->mutex) == -1) {  /* enter critical region */
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+
+    sh->fSt.st.waiterStat = ORDERRECEIVED;
+    saveState(nFic, &sh->fSt); 
+
+    if (semUp(semgid, sh->mutex) == -1) {  /* exit critical region */
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
 
 }
 
@@ -266,7 +284,7 @@ static void takeFoodToTable (int n)
     sh->fSt.st.waiterStat = TAKE_TO_TABLE;
     saveState(nFic, &sh->fSt); 
 
-    for (int i = 0; i < TABLESIZE; i++) {
+    for (int i = 0; i < TABLEREQ; i++) {
         if (semUp(semgid, sh->foodArrived) == -1)  {                                                  /* enter critical region */
             perror ("error on the up operation for semaphore access");
             exit (EXIT_FAILURE);
