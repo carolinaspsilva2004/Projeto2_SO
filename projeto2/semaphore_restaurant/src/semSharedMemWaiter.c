@@ -172,13 +172,14 @@ static request waitForClientOrChef()
     
 
     // TODO insert your code here
+   // TODO insert your code here
     if (sh->fSt.foodOrder == 1) {
         req.reqType = FOODREQ;
         req.reqGroup = sh->fSt.groupsWaiting;
         sh->fSt.foodOrder = 0;
         sh->fSt.st.waiterStat = ORDERRECEIVED;
-        saveState(nFic, &sh->fSt); 
-    } else if (sh->fSt.foodOrder== 1) {
+        saveState(nFic, &sh->fSt);
+    } else if (sh->fSt.foodOrder == 2) {
         req.reqType = FOODREADY;
         req.reqGroup = sh->fSt.foodGroup;
         sh->fSt.foodOrder = 0;
@@ -186,15 +187,16 @@ static request waitForClientOrChef()
         saveState(nFic, &sh->fSt);
     } else {
         sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
-        saveState(nFic, &sh->fSt); 
+        saveState(nFic, &sh->fSt);
     }
+
 
     if (semUp(semgid, sh->mutex) == -1) {  /* exit critical region */
         perror("error on the up operation for semaphore access (WT)");
         exit(EXIT_FAILURE);
     }
 
-    if (semUp(semgid, sh->receptionistRequestPossible) == -1) {  /* signal that the waiter is ready for a new request */
+    if (semUp(semgid, sh->waiterRequestPossible) == -1) {  /* signal that the waiter is ready for a new request */
         perror("error on the up operation for semaphore access (WT)");
         exit(EXIT_FAILURE);
     }
