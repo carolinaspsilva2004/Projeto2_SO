@@ -149,14 +149,42 @@ int main (int argc, char *argv[])
  */
 static int decideTableOrWait(int n){
      //TODO insert your code here
-    while(1){
-        if(sh->fSt.assignedTable[n] == 0){
-            sh->fSt.assignedTable[n] = 1;
-            return n;
-        }
+    int table_id = -1;
+    int num_tables = 0;
 
-     return -1;
-}
+    // Loop through the groups
+    for (int g = 0; g < MAXGROUPS; g++) {
+        if (sh->fSt.assignedTable[g] == 1) {
+            // Group is assigned a table
+            if (num_tables == 0) {
+                table_id = 0;
+            } else {
+                // If more than one table is already assigned, set table_id to -1
+                table_id = -1;
+                break;  // Exit the loop early since there's no need to check further
+            }
+        } else if (sh->fSt.assignedTable[g] == 0) {
+            // Group is not assigned a table
+            if (num_tables == 0) {
+                table_id = 1;
+            } else {
+                // If more than one table is already assigned, set table_id to -1
+                table_id = -1;
+                break;  // Exit the loop early since there's no need to check further
+            }
+        }
+    }
+
+    if (table_id != -1) {
+        // A valid table_id was found
+        groupRecord[n] = ATTABLE;
+        return table_id;
+    } else {
+        // No available table, update status and return -1
+        groupRecord[n] = WAIT;
+        sh->fSt.groupsWaiting++;
+        return -1;
+    }
 }
 
 /**
@@ -170,13 +198,20 @@ static int decideTableOrWait(int n){
 static int decideNextGroup()
 {
      //TODO insert your code here
-    for (int i = 0; i < sh->fSt.nGroups; i++){
-        if (groupRecord[i] == WAIT){
-            groupRecord[i] = ATTABLE;
-            return i;
+    if (sh->fSt.groupsWaiting == 0) {
+        return -1;
+    }
+    else{
+        for (int g = 0; g < MAXGROUPS; g++) {
+            if (groupRecord[g] == WAIT) {
+                groupRecord[g] = ATTABLE;
+                sh->fSt.groupsWaiting--;
+                return g;
+            }
         }
-     return -1;
-}
+    }
+
+    return -1;
 }
 
 /**
@@ -191,10 +226,6 @@ static int decideNextGroup()
 static request waitForGroup()
 {
     request ret; 
-    if (semDown (semgid, sh->receptionistRequestPossible) == -1) {
-            perror ("error on the up operation for semaphore access");
-            exit (EXIT_FAILURE);
-        }
 
     if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
         perror ("error on the up operation for semaphore access (WT)");
@@ -202,14 +233,20 @@ static request waitForGroup()
     }
 
     // TODO insert your code here
-    ret = sh->fSt.receptionistRequest;
-        
+    sh->fSt.st.receptionistStat = WAIT_FOR_REQUEST;
+    saveState(nFic, &sh->fSt);
+    
     if (semUp (semgid, sh->mutex) == -1)      {                                             /* exit critical region */
         perror ("error on the down operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
 
     // TODO insert your code here
+    if (semDown (semgid, sh->receptionistReq) == -1)
+    {
+        perror ("error on the up operation for semaphore access (PT)");
+        exit (EXIT_FAILURE);
+    }
 
     if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
         perror ("error on the up operation for semaphore access (WT)");
@@ -217,6 +254,7 @@ static request waitForGroup()
     }
 
     // TODO insert your code here
+    ret = sh->fSt.receptionistRequest; 
 
     if (semUp (semgid, sh->mutex) == -1) {                                                  /* exit critical region */
      perror ("error on the down operation for semaphore access (WT)");
@@ -224,6 +262,11 @@ static request waitForGroup()
     }
 
     // TODO insert your code here
+    if (semUp (semgid, sh->receptionistRequestPossible) == -1)
+    {
+        perror ("error on the up operation for semaphore access (PT)");
+        exit (EXIT_FAILURE);
+    }
 
     return ret;
 
@@ -245,38 +288,25 @@ static void provideTableOrWaitingRoom (int n)
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
-    int tableId = decideTableOrWait(n);
+    // TODO 
+    sh->fSt.st.receptionistStat = ASSIGNTABLE;
+    saveState(nFic, &sh->fSt);
 
-    if (tableId != -1) {
-        if (semDown(semgid, sh->mutex) == -1) { /* enter critical region */
-            perror("error on the down operation for semaphore access (WT)");
-            exit(EXIT_FAILURE);
-        }
+    int table_id = decideTableOrWait(n);
 
-        sh->fSt.assignedTable[n] = tableId + 1; /* assignedTable is 1-indexed */
-        sh->receptionistReq.reqType = TABLEREQ;
-        sh->receptionistReq.reqGroup = n;
-        sh->fSt.st.groupStat[n] = TABLEDONE;
-        saveState(nFic, &sh->fSt);
+    if (table_id != -1) {
 
-        if (semUp(semgid, sh->receptionistReq) == -1) { /* signal the group to proceed or wait */
-            perror("error on the up operation for semaphore access (WT)");
-            exit(EXIT_FAILURE);
-        }
+        sh->fSt.assignedTable[n] = table_id;
 
-        if (semUp(semgid, sh->receptionistReq) == -1) { /* exit critical region */
-            perror("error on the up operation for semaphore access (WT)");
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        if (semUp(semgid, sh->receptionistReq) == -1) { /* exit critical region */
-            perror("error on the up operation for semaphore access (WT)");
+        if (semUp(semgid, sh->waitForTable[n]) == -1) {
+            perror("error on the up operation for semaphore access (PT)");
             exit(EXIT_FAILURE);
         }
     }
-    if (semUp (semgid, sh->mutex) == -1)  {                                                  /* exit critical region */
-     perror ("error on the down operation for semaphore access (WT)");
+
+
+    if (semUp (semgid, sh->mutex) == -1) {                                               /* exit critical region */
+        perror ("error on the down operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
 }
@@ -298,27 +328,29 @@ static void receivePayment (int n)
     }
 
     // TODO insert your code here
-    sh->fSt.st.groupStat[n] = CHECKOUT;
+
+    sh ->fSt.st.receptionistStat = RECVPAY;
     saveState(nFic, &sh->fSt);
 
-    int nextGroup = decideNextGroup();
-    // TODO insert your code here
-   
+    int table_id = sh->fSt.assignedTable[n];
+    int groupid = decideNextGroup();
 
-    if (nextGroup != -1) {
-        
-        sh->receptionistRequestPossible.reqType = TABLEREQ;
-        sh->receptionistRequestPossible.reqGroup = nextGroup;
-        sh->fSt.assignedTable[nextGroup] = 1; /* assignedTable is 1-indexed */
-        sh->fSt.st.groupStat[nextGroup] = TABLEDONE;
-        saveState(nFic, &sh->fSt);
-
-        if (semUp(semgid, sh->receptionistRequestPossible) == -1) { /* signal the next group to proceed */
-            perror("error on the up operation for semaphore access (WT)");
-            exit(EXIT_FAILURE);
+    if (groupid != -1)
+    {
+         sh->fSt.assignedTable[groupid] = table_id;
+         groupRecord[n] = DONE;
+    
+        if (semUp (semgid, sh->waitForTable[groupid]) == -1)
+        {
+            perror ("error on the up operation for semaphore access (PT)");
+            exit (EXIT_FAILURE);
         }
-
+  
     }
+    
+    sh->fSt.assignedTable[n] = -1;
+
+    
     if (semUp (semgid, sh->mutex) == -1)  {                                                  /* exit critical region */
      perror ("error on the down operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
