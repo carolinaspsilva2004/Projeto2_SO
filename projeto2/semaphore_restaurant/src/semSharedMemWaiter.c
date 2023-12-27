@@ -265,4 +265,3 @@ static void takeFoodToTable (int n)
     }
 }
 
-
