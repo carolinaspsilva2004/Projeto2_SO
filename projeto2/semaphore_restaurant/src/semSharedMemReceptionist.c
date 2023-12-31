@@ -152,23 +152,12 @@ static int decideTableOrWait(int n)
     int tableId = 0;
     int num_tables = 0;
 
-    for (int i = 0; i < MAXGROUPS; i++) {  
-        if(sh->fSt.assignedTable[i] == 1) {   
+    for (int i = 0; i < MAXGROUPS; i++) {
+        if (sh->fSt.assignedTable[i] == 1 || sh->fSt.assignedTable[i] == 0) {
             if (num_tables == 0) {
                 tableId = 0;
                 num_tables++;
-            }
-            else {
-                tableId = -1;
-                break;
-            }
-        }
-        else if (sh->fSt.assignedTable[i] == 0) {
-            if (num_tables == 0) {
-                tableId = 1;
-                num_tables++;
-            }
-            else {
+            } else {
                 tableId = -1;
                 break;
             }
@@ -178,8 +167,7 @@ static int decideTableOrWait(int n)
     if (tableId != -1) {
         groupRecord[n] = ATTABLE;
         return tableId;
-    } 
-    else {
+    } else {
         groupRecord[n] = WAIT;
         sh->fSt.groupsWaiting++;
         return -1;
@@ -210,7 +198,6 @@ static int decideNextGroup()
             }
         }
     }
-
     return -1;
 }
 
